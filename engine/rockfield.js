@@ -1,88 +1,179 @@
 // engine/rockfield.js
-// Global blob growth field — blobs are seeded in world space
-// and can spill across multiple chunks naturally.
+// Nucleus-based rock blobs (boulders, walls) with caching.
+// Optimized: each blob nucleus is generated once, then reused across chunks.
 
 import { rand01 } from './rng.js';
 
-// Helper for stable randoms
 function rng(seed, x, y, salt = 0) {
   return rand01(seed, x, y, salt);
 }
 
-// Main: get all blobs overlapping (or near) an AABB in WORLD CELL coordinates
-export function blobsInAABB(seed, cfg, aabb) {
-  const { minX, minY, maxX, maxY } = aabb;
+// Global blob cache: key = `${seed}:${cx},${cy}`, value = { id, type, cells }
+const blobCache = new Map();
+
+/**
+ * Get blobs that overlap a single chunk.
+ * @param {number} seed - world seed
+ * @param {object} cfg  - config.rocks section
+ * @param {object} chunkAABB - {minX, minY, maxX, maxY} for this chunk
+ */
+export function blobsForChunk(seed, cfg, chunkAABB) {
   const results = [];
+  const ORIGIN_STEP = 64; // spacing between nuclei
 
-  // Spacing between potential blob origins (world cells).
-  // Smaller = more origins (denser), larger = fewer (sparser).
-  const ORIGIN_STEP = 64;
+  const { minX, minY, maxX, maxY } = chunkAABB;
 
-  // Compute origin-cell bounds that cover the AABB, with a small margin
+  // Figure out which origin cells might influence this chunk
   const cx0 = Math.floor(minX / ORIGIN_STEP);
   const cy0 = Math.floor(minY / ORIGIN_STEP);
   const cx1 = Math.floor(maxX / ORIGIN_STEP);
   const cy1 = Math.floor(maxY / ORIGIN_STEP);
 
-  // IMPORTANT: iterate cy over [cy0..cy1], cx over [cx0..cx1]
-  for (let cy = cy0 - 2; cy <= cy1 + 2; cy++) {
-    for (let cx = cx0 - 2; cx <= cx1 + 2; cx++) {
-      // Deterministic roll for whether to spawn here
-      const roll = rng(seed, cx, cy, 100);
+  for (let cy = cy0 - 1; cy <= cy1 + 1; cy++) {
+    for (let cx = cx0 - 1; cx <= cx1 + 1; cx++) {
+      const cacheKey = `${seed}:${cx},${cy}`;
+      let blob = blobCache.get(cacheKey);
 
-      let typeKey = null; // matches config keys exactly ("boulders" / "walls")
-      if (roll < cfg.boulders.spawnProb) typeKey = 'boulders';
-      else if (roll < cfg.boulders.spawnProb + cfg.walls.spawnProb) typeKey = 'walls';
-      if (!typeKey) continue;
+      if (!blob) {
+        // Roll if this nucleus spawns a blob
+        const roll = rng(seed, cx, cy, 100);
 
-      // Blob origin in world-cell coordinates (jitter inside the origin cell)
-      const originX = cx * ORIGIN_STEP + Math.floor(rng(seed, cx, cy, 200) * ORIGIN_STEP);
-      const originY = cy * ORIGIN_STEP + Math.floor(rng(seed, cx, cy, 201) * ORIGIN_STEP);
+        let typeKey = null;
+        if (roll < cfg.boulders.spawnProb) typeKey = 'boulders';
+        else if (roll < cfg.boulders.spawnProb + cfg.walls.spawnProb) typeKey = 'walls';
+        if (!typeKey) continue; // no blob here
 
-      // Random size (steps) from config
-      const sizeMin = cfg[typeKey].sizeMin;
-      const sizeMax = cfg[typeKey].sizeMax;
-      const steps = sizeMin + Math.floor(rng(seed, cx, cy, 300) * Math.max(0, sizeMax - sizeMin));
+        // Blob origin jittered inside ORIGIN_STEP cell
+        const originX = cx * ORIGIN_STEP + Math.floor(rng(seed, cx, cy, 200) * ORIGIN_STEP);
+        const originY = cy * ORIGIN_STEP + Math.floor(rng(seed, cx, cy, 201) * ORIGIN_STEP);
 
-      // Grow blob and collect its cells
-      const cells = growBlob(seed, originX, originY, steps);
+        // Size range
+        const sizeMin = cfg[typeKey].sizeMin;
+        const sizeMax = cfg[typeKey].sizeMax;
+        const target = sizeMin + Math.floor(rng(seed, cx, cy, 300) * (sizeMax - sizeMin));
 
-      results.push({ id: `${typeKey}@${cx},${cy}`, type: typeKey, cells });
+        const params = nucleusParamsFor(typeKey, seed, cx, cy);
+        const cells = growNucleus(seed, originX, originY, target, params);
+
+        blob = { id: `${typeKey}@${cx},${cy}`, type: typeKey, cells };
+        blobCache.set(cacheKey, blob);
+      }
+
+      // Only return this blob if it overlaps our chunk AABB
+      if (overlaps(blob.cells, chunkAABB)) {
+        results.push(blob);
+      }
     }
   }
 
   return results;
 }
 
-// Random-walk growth of a blob from (ox, oy)
-function growBlob(seed, ox, oy, steps) {
+// ---------------- nucleus growth ----------------
+
+const DIR4 = [[1,0],[-1,0],[0,1],[0,-1]];
+const DIAG4 = [[1,1],[1,-1],[-1,1],[-1,-1]];
+
+function growNucleus(seed, ox, oy, targetCount, p) {
   const cells = new Set();
-  let frontier = [[ox, oy]];
+  const frontier = [];
+
   cells.add(key(ox, oy));
+  frontier.push([ox, oy]);
 
-  for (let i = 0; i < steps; i++) {
-    if (frontier.length === 0) break;
-
-    // Pick a frontier cell deterministically
-    const pick = Math.floor(rng(seed, ox + i, oy - i, i) * frontier.length);
+  let t = 0;
+  while (cells.size < targetCount && frontier.length) {
+    const pick = Math.floor(rng(seed, ox + t, oy - t, t) * frontier.length);
     const [x, y] = frontier[pick];
 
-    // 4-neighbor growth
-    const dirs = [[1,0], [-1,0], [0,1], [0,-1]];
-    const dpick = Math.floor(rng(seed, x, y, i + 1000) * dirs.length);
-    const [dx, dy] = dirs[dpick];
-    const nx = x + dx, ny = y + dy;
+    const includeDiag = rng(seed, x, y, 1000 + t) < p.diagProb;
+    const dirs = includeDiag ? DIR4.concat(DIAG4) : DIR4;
 
-    const k = key(nx, ny);
-    if (!cells.has(k)) {
-      cells.add(k);
-      frontier.push([nx, ny]);
+    const dirsSorted = dirs
+      .map((d, i) => ({ d, r: rng(seed, x + d[0], y + d[1], 2000 + i + t) }))
+      .sort((a, b) => a.r - b.r)
+      .map(o => o.d);
+
+    for (const [dx, dy] of dirsSorted) {
+      if (cells.size >= targetCount) break;
+
+      const nx = x + dx, ny = y + dy;
+      const k = key(nx, ny);
+      if (cells.has(k)) continue;
+
+      const neighborFilled = countFilledNeighbors(cells, nx, ny);
+      const base = p.fillProb;
+      const bias = 1 - Math.pow(1 - p.roundnessBias, neighborFilled);
+      const jitter = rng(seed, nx, ny, 3000 + t) * p.noiseJitter;
+
+      const chance = clamp01(base + bias * p.biasWeight + jitter - p.hollowPenalty);
+      if (rng(seed, nx, ny, 4000 + t) < chance) {
+        cells.add(k);
+        frontier.push([nx, ny]);
+      }
     }
+
+    if (rng(seed, x, y, 5000 + t) < p.popProb) {
+      frontier.splice(pick, 1);
+    }
+
+    t++;
+    if (t > targetCount * 8) break;
   }
 
   return cells;
 }
 
-function key(x, y) {
-  return `${x},${y}`;
+function countFilledNeighbors(cells, x, y) {
+  let n = 0;
+  for (const [dx, dy] of DIR4) {
+    if (cells.has(key(x + dx, y + dy))) n++;
+  }
+  return n;
+}
+
+function key(x, y) { return `${x},${y}`; }
+function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+
+function overlaps(cells, aabb) {
+  for (const k of cells) {
+    const [x, y] = k.split(',').map(Number);
+    if (x >= aabb.minX && x <= aabb.maxX &&
+        y >= aabb.minY && y <= aabb.maxY) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Params per type
+function nucleusParamsFor(typeKey, seed, cx, cy) {
+  let p = {
+    fillProb: 0.18,
+    roundnessBias: 0.55,
+    biasWeight: 0.55,
+    diagProb: 0.25,
+    noiseJitter: 0.12,
+    hollowPenalty: 0.0,
+    popProb: 0.12
+  };
+
+  if (typeKey === 'walls') {
+    p.fillProb = 0.22;
+    p.roundnessBias = 0.65;
+    p.biasWeight = 0.6;
+    p.diagProb = 0.2;
+    p.noiseJitter = 0.1;
+    p.hollowPenalty = 0.02;
+    p.popProb = 0.1;
+  } else if (typeKey === 'boulders') {
+    p.fillProb = 0.17;
+    p.roundnessBias = 0.6;
+    p.biasWeight = 0.5;
+    p.diagProb = 0.35;
+    p.noiseJitter = 0.14;
+    p.hollowPenalty = 0.0;
+    p.popProb = 0.14;
+  }
+  return p;
 }

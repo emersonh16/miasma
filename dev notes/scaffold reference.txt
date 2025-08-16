@@ -1,5 +1,14 @@
-Derelict Drifters — Scaffold Reference
+Perfect, thanks for linking the scaffold doc ✅
+
+I’ll update it with the new **rocks pipeline** (rockfield → gridgen → rocks) so it matches the refactor we just did.
+
+---
+
+# Derelict Drifters — Scaffold Reference (updated)
+
 ✅ Current Structure
+
+```
 index.html
 core/
   game.js        // main loop, reset, input, system wiring
@@ -12,78 +21,73 @@ engine/
   chunkreg.js    // listens to mount/unmount, keeps Set of active chunks
   rng.js         // deterministic rand01(seed, cx, cy, salt)
   diffstore.js   // per-chunk persistent memory (rocks broken, loot, etc.)
+  rockfield.js   // global nuclei → grow big blobs once, cached
+  gridgen.js     // per-chunk 0/1 grid → samples blobsForChunk
 systems/
   player.js      // player is always center; moves camera with WASD
   world.js       // draws mounted chunks (checkerboard), tracks visited
+  rocks.js       // manages rock grids per chunk, draws rocks, isSolid()
 ui/
   devhud.js      // debug HUD (top-right): FPS, mounted, remembered
 docs/
   scaffold.md    // (this doc)
+```
+
+---
 
 🔑 Key Ideas
 
-Player locked to screen center → camera moves world instead.
+* **Player** locked to screen center → camera moves world instead.
+* **Streamer** = stagehands → decides which chunks are “on stage” now.
+* **ChunkReg** = registry → keeps live list of mounted chunks.
+* **World** = paint crew → just draws what registry says exists.
+* **DiffStore** = memory → stores changes that must persist (e.g. rocks smashed).
+* **DevHUD** = director’s monitor → shows FPS + counts (top-right).
+* **Reset()** = “Cut!” → wipes state clean and re-inits systems.
+* **Rockfield** = geology → picks nuclei in world space, grows blobs once, caches them.
+* **Gridgen** = quarry → for each mounted chunk, samples rockfield blobs into a binary grid.
+* **Rocks** = props crew → draws those grids, handles collisions, asks “isSolid(x,y)?”.
 
-Streamer = stagehands → decides which chunks are “on stage” now.
-
-ChunkReg = registry → keeps live list of mounted chunks.
-
-World = paint crew → just draws what registry says exists.
-
-DiffStore = memory → stores changes that must persist (e.g. rocks smashed).
-
-DevHUD = director’s monitor → shows FPS + counts (top-right).
-
-Reset() = “Cut!” → wipes state clean and re-inits systems.
+---
 
 🎯 Next Safe Scaffolding Steps
 
-Unique visited counter
+* **Unique visited counter**
+  Count how many distinct chunks you’ve ever entered. Show in DevHUD.
 
-Count how many distinct chunks you’ve ever entered.
+* **Pause toggle (P)**
+  Freeze updates (but still draw) for testing/debugging.
 
-Show in DevHUD for feedback.
+* **Weather Bubble skeleton**
+  Big circle that follows player; isInside(x,y) check. Used later for fog/weather logic (Noita-style).
 
-Pause toggle (P)
+* **Player HUD (top-left)**
+  Health, energy, beam bars — leaves DevHUD for debug only.
 
-Freeze updates (but still draw) for testing/debugging.
+* **Save/Load snapshot (later)**
+  Seed + camera + diffstore → localStorage. Keeps progress after reload.
 
-Weather Bubble skeleton
-
-Big circle that follows player; isInside(x,y) check.
-
-Used later for fog/weather logic (Noita-style).
-
-Player HUD (top-left)
-
-Health, energy, beam bars — leaves DevHUD for debug only.
-
-Save/Load snapshot (later)
-
-Seed + camera + diffstore → localStorage.
-
-Lets us keep progress after crashes or reloads.
+---
 
 📝 Definition of Done (for scaffold)
 
-Systems init cleanly via reset().
+* Systems init cleanly via reset().
+* Flags in config can enable/disable features.
+* Events (chunk\:mount/unmount) decouple systems.
+* DiffStore is generic, capped, and JSON-friendly.
+* DevHUD top-right shows stable counts.
+* Rockfield caches blobs; Gridgen builds per-chunk grids only once.
+* No test junk left behind — every system behind a flag.
 
-Flags in config can enable/disable features.
-
-Events (chunk:mount/unmount) decouple systems.
-
-DiffStore is generic, capped, and JSON-friendly.
-
-DevHUD top-right shows stable counts.
-
-No test junk left behind — every system behind a flag.
+---
 
 ✅ With this scaffold solid, we can safely add fun systems:
 
-Rocks (persistent, saved in DiffStore)
+* **Rocks** (persistent, saved in DiffStore)
+* **Miasma** (dynamic bubble, no saving per chunk)
+* **Enemies** (spawned per chunk, leashed, saved only if “dead”)
+* **Pickups, weapons, weather, etc.**
 
-Miasma (dynamic bubble, no saving per chunk)
+---
 
-Enemies (spawned per chunk, leashed, saved only if “dead”)
-
-Pickups, weapons, weather, etc.
+👉 Do you want me to actually **overwrite your `docs/scaffold.md`** with this updated version so it’s already synced in your repo, or would you prefer to paste it in yourself?
