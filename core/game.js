@@ -1,4 +1,4 @@
-// core/game.js — main loop wiring (director-friendly scaffold)
+// core/game.js — main loop wiring (adds Rocks system to init/update/draw)
 import { config } from './config.js';
 import { initInput, updateInput } from '../engine/input.js';
 import { initBus } from '../engine/eventbus.js';
@@ -6,9 +6,10 @@ import { initBus } from '../engine/eventbus.js';
 import * as Streamer from '../engine/streamer.js';
 import * as World from '../systems/world.js';
 import * as Player from '../systems/player.js';
+import * as Rocks from '../systems/rocks.js';        // <-- NEW
 import * as DevHUD from '../ui/devhud.js';
 import * as DiffStore from '../engine/diffstore.js';
-import * as ChunkReg from '../engine/chunkreg.js'; // <-- NEW
+import * as ChunkReg from '../engine/chunkreg.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -36,7 +37,6 @@ function clear() {
 }
 
 export function reset() {
-  // Director's "cut!" — start fresh without reloads
   state.time = 0;
   state.dt = 0;
   state.camera.x = 0;
@@ -47,17 +47,18 @@ export function reset() {
   initBus(state);
   initInput(state);
 
-  // Generic per-chunk memory (for persistent changes like rocks/loot/etc.)
+  // Persistent diffs ready for later (carving, etc.)
   DiffStore.init(state, { max: 200 });
 
-  // Track mounted chunks via events (simple registry)
-  ChunkReg.init(state); // <-- NEW
+  // Track mounted chunks via events
+  ChunkReg.init(state);
 
   // Systems
   World.init(state, config);
   Streamer.init(state, config);
+  if (config.flags.enableRocks) Rocks.init(state, config);   // <-- NEW (guarded by flag)
   Player.init(state, config);
-  if (config.flags?.enableDevHUD) DevHUD.init(state);
+  if (config.flags.enableDevHUD) DevHUD.init(state);
 }
 
 function init() {
@@ -82,14 +83,16 @@ function loop(now) {
 
   // Systems tick
   World.update(state, state.dt);
+  if (config.flags.enableRocks) Rocks.update(state, state.dt);  // <-- NEW
   Player.update(state, state.dt);
-  if (config.flags?.enableDevHUD) DevHUD.update(state, state.dt);
+  if (config.flags.enableDevHUD) DevHUD.update(state, state.dt);
 
-  // Draw order
+  // Draw order: world → rocks → player → HUD
   clear();
   World.draw(ctx, state, state.view);
+  if (config.flags.enableRocks) Rocks.draw(ctx, state, state.view); // <-- NEW
   Player.draw(ctx, state, state.view);
-  if (config.flags?.enableDevHUD) DevHUD.draw(ctx, state);
+  if (config.flags.enableDevHUD) DevHUD.draw(ctx, state);
 
   requestAnimationFrame(loop);
 }
