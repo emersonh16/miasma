@@ -1,4 +1,9 @@
 // ui/devhud.js — the director's little monitor (draws on canvas)
+// Shows FPS, mounted chunk count, remembered diffs count (if diffstore present)
+
+import { count as mountedCount } from '../engine/chunkreg.js';
+import { size as diffstoreSize } from '../engine/diffstore.js';
+
 export function init(state) {
   state.devhud = { fps: 0, _acc: 0, _frames: 0 };
 }
@@ -13,8 +18,8 @@ export function update(state, dt) {
 }
 
 export function draw(ctx, state) {
-  const mounted = state.streamer?.mounted?.size ?? 0;
-  const remembered = state.world?.chunks?.size ?? 0;
+  const mounted    = mountedCount(state);
+  const remembered = diffstoreSize ? diffstoreSize(state) : 0;
 
   ctx.save();
   ctx.font = '12px monospace';
