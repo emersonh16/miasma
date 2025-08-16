@@ -1,6 +1,4 @@
-// ui/devhud.js — the director's little monitor (draws on canvas)
-// Shows FPS, mounted chunk count, remembered diffs count (if diffstore present)
-
+// ui/devhud.js — top-right HUD with FPS, mounted, remembered
 import { count as mountedCount } from '../engine/chunkreg.js';
 import { size as diffstoreSize } from '../engine/diffstore.js';
 
@@ -21,11 +19,17 @@ export function draw(ctx, state) {
   const mounted    = mountedCount(state);
   const remembered = diffstoreSize ? diffstoreSize(state) : 0;
 
+  // draw in the top-right corner
+  const x = state.view.w - 10; // right margin
+  let y = 10;
+
   ctx.save();
   ctx.font = '12px monospace';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(240,245,255,0.9)';
-  ctx.fillText(`FPS: ${state.devhud.fps}`, 10, 18);
-  ctx.fillText(`Mounted: ${mounted}`, 10, 34);
-  ctx.fillText(`Remembered: ${remembered}`, 10, 50);
+  ctx.fillText(`FPS: ${state.devhud.fps}`, x, y); y += 16;
+  ctx.fillText(`Mounted: ${mounted}`,       x, y); y += 16;
+  ctx.fillText(`Remembered: ${remembered}`, x, y);
   ctx.restore();
 }
