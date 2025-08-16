@@ -1,0 +1,89 @@
+Derelict Drifters — Scaffold Reference
+✅ Current Structure
+index.html
+core/
+  game.js        // main loop, reset, input, system wiring
+  config.js      // all tunables + feature flags
+engine/
+  eventbus.js    // emit / on system
+  input.js       // keysDown + wasPressed
+  streamer.js    // mounts/unmounts chunks around camera
+  chunk.js       // math helpers (world→chunk, keys, origins)
+  chunkreg.js    // listens to mount/unmount, keeps Set of active chunks
+  rng.js         // deterministic rand01(seed, cx, cy, salt)
+  diffstore.js   // per-chunk persistent memory (rocks broken, loot, etc.)
+systems/
+  player.js      // player is always center; moves camera with WASD
+  world.js       // draws mounted chunks (checkerboard), tracks visited
+ui/
+  devhud.js      // debug HUD (top-right): FPS, mounted, remembered
+docs/
+  scaffold.md    // (this doc)
+
+🔑 Key Ideas
+
+Player locked to screen center → camera moves world instead.
+
+Streamer = stagehands → decides which chunks are “on stage” now.
+
+ChunkReg = registry → keeps live list of mounted chunks.
+
+World = paint crew → just draws what registry says exists.
+
+DiffStore = memory → stores changes that must persist (e.g. rocks smashed).
+
+DevHUD = director’s monitor → shows FPS + counts (top-right).
+
+Reset() = “Cut!” → wipes state clean and re-inits systems.
+
+🎯 Next Safe Scaffolding Steps
+
+Unique visited counter
+
+Count how many distinct chunks you’ve ever entered.
+
+Show in DevHUD for feedback.
+
+Pause toggle (P)
+
+Freeze updates (but still draw) for testing/debugging.
+
+Weather Bubble skeleton
+
+Big circle that follows player; isInside(x,y) check.
+
+Used later for fog/weather logic (Noita-style).
+
+Player HUD (top-left)
+
+Health, energy, beam bars — leaves DevHUD for debug only.
+
+Save/Load snapshot (later)
+
+Seed + camera + diffstore → localStorage.
+
+Lets us keep progress after crashes or reloads.
+
+📝 Definition of Done (for scaffold)
+
+Systems init cleanly via reset().
+
+Flags in config can enable/disable features.
+
+Events (chunk:mount/unmount) decouple systems.
+
+DiffStore is generic, capped, and JSON-friendly.
+
+DevHUD top-right shows stable counts.
+
+No test junk left behind — every system behind a flag.
+
+✅ With this scaffold solid, we can safely add fun systems:
+
+Rocks (persistent, saved in DiffStore)
+
+Miasma (dynamic bubble, no saving per chunk)
+
+Enemies (spawned per chunk, leashed, saved only if “dead”)
+
+Pickups, weapons, weather, etc.
