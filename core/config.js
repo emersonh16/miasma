@@ -14,44 +14,36 @@ export const config = {
   },
 
   world: {
-    // Infinite world chunks
     chunkSize: 256,
-    seed: 1337,
-
-    // Streaming coverage
+    seed: Math.floor(Math.random() * 9999999), // random seed on each run
     streamRadius: 3,
-
-    // Debug
     showChunkLabels: true
   },
 
   // Feature switches (flip systems on/off without code changes)
   flags: {
     enableDevHUD: true,
-    enableRocks:  true
+    enableRocks: true
   },
 
   // Rocks configuration
   rocks: {
-    gridRes: 64,        // cells per chunk side
-    cellSize: 4,        // world units per cell (gridRes * cellSize ≈ chunkSize)
+    gridRes: 64,
+    cellSize: 4,
 
-    // --- Boulder blobs (small, round-ish) ---
     boulders: {
-      spawnProb: 0.04,   // chance per origin cell to spawn a boulder blob
-      sizeMin: 20,       // min growth steps
-      sizeMax: 60        // max growth steps
+      spawnProb: 0.6,
+      sizeMin: 20,
+      sizeMax: 80
     },
 
-    // --- Wall blobs (large, sprawling formations) ---
     walls: {
-      spawnProb: 0.01,   // chance per origin cell to spawn a wall/cavern
-      sizeMin: 200,      // min growth steps
-      sizeMax: 500       // max growth steps
+      spawnProb: 0.2,
+      sizeMin: 8000,
+      sizeMax: 16000
     },
 
-    // Visuals (debug look for now)
-    fill:   'rgba(130,140,160,0.55)',
+    fill: 'rgba(130,140,160,0.55)',
     stroke: 'rgba(220,230,255,0.25)'
   }
 };
