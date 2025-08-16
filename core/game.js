@@ -18,7 +18,8 @@ const state = {
   time: 0,
   dt: 0,
   camera: { x: 0, y: 0 },
-  view: { w: 0, h: 0 }
+  view: { w: 0, h: 0 },
+  safezones: []
 };
 
 function resize() {
@@ -43,6 +44,8 @@ export function reset() {
   state.camera.y = 0;
   state.view.w = canvas.clientWidth;
   state.view.h = canvas.clientHeight;
+  state.safezones = [{ x: 0, y: 0, r: config.player.radius * 4 }];
+
 
   initBus(state);
   initInput(state);

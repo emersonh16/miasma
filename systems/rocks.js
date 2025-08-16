@@ -102,13 +102,22 @@ function applySafezones(state, grid, cx, cy) {
   const R  = state.rocks.gridRes;
   const cellW = cs / R;
 
+  const left   = cx * cs;
+  const top    = cy * cs;
+  const right  = left + cs;
+  const bottom = top + cs;
+
+
   for (const zone of state.safezones) {
     const { x: zx, y: zy, r } = zone;
-    // skip if zone is far from this chunk
-    if (Math.abs(zx - cx * cs) > cs + r) continue;
-    if (Math.abs(zy - cy * cs) > cs + r) continue;
+      // Skip if the zone does not intersect this chunk at all
+    if (zx + r <= left || zx - r >= right || zy + r <= top || zy - r >= bottom) {
+      continue;
+    }
 
-    const { lx, ly } = worldToLocal(zx, zy, cs);
+    // Zone center relative to this chunk
+    const lx = zx - left;
+    const ly = zy - top;
     const gxC = Math.floor(lx / cellW);
     const gyC = Math.floor(ly / cellW);
     const cellsR = Math.ceil(r / cellW);
